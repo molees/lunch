@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TEAM LUNCH EXPENSE | 팀 식대·회식비 관리</title>
+<style>
+:root{--primary:#2563eb;--dark:#0f172a;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc;--card:#fff;--danger:#dc2626;--ok:#059669}
+*{box-sizing:border-box} body{margin:0;font-family:"Segoe UI","Malgun Gothic",Arial,sans-serif;background:var(--bg);color:#172033}
+header{background:var(--dark);color:white;padding:18px 24px;display:flex;justify-content:space-between;align-items:center;gap:20px}
+header h1{margin:0;font-size:22px} header small{color:#cbd5e1}
+.container{max-width:1450px;margin:auto;padding:20px}
+.toolbar,.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:0 2px 8px #00000008}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px}
+button{border:0;border-radius:8px;padding:9px 13px;font-weight:600;cursor:pointer;background:#e2e8f0;color:#172033}
+button.primary{background:var(--primary);color:white} button.danger{background:#fee2e2;color:#991b1b}
+button.ok{background:#d1fae5;color:#065f46}
+input,select,textarea{width:100%;padding:9px 10px;border:1px solid #cbd5e1;border-radius:7px;background:white;font:inherit}
+label{font-size:12px;font-weight:700;color:#475569;display:block;margin-bottom:5px}
+.grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
+.field{min-width:0}.wide{grid-column:span 2}.full{grid-column:1/-1}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.stat{background:white;border:1px solid var(--line);border-radius:12px;padding:15px}.stat .n{font-size:24px;font-weight:800;margin-top:5px}.stat .t{font-size:12px;color:var(--muted)}
+.section-title{font-size:16px;font-weight:800;margin:4px 0 14px}
+table{width:100%;border-collapse:collapse;font-size:13px;background:white}
+th,td{padding:9px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+th{background:#f1f5f9;position:sticky;top:0;z-index:1}
+td.num,th.num{text-align:right} .tag{padding:3px 7px;border-radius:999px;font-size:11px;font-weight:700;background:#e0e7ff;color:#3730a3}
+.empty{text-align:center;padding:35px;color:var(--muted)}
+.two{display:grid;grid-template-columns:1.35fr .65fr;gap:16px}
+.hidden{display:none!important}
+.notice{padding:10px 12px;background:#eff6ff;border-left:4px solid var(--primary);font-size:12px;color:#334155;border-radius:5px}
+footer{padding:25px;text-align:center;color:var(--muted);font-size:12px}
+@media(max-width:1000px){.grid{grid-template-columns:repeat(2,1fr)}.wide{grid-column:span 2}.cards{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}}
+@media(max-width:600px){header{align-items:flex-start;flex-direction:column}.container{padding:10px}.grid{grid-template-columns:1fr}.wide{grid-column:span 1}.cards{grid-template-columns:1fr}table{font-size:11px}.table-wrap{overflow:auto}}
+@media print{header,.toolbar,.entry-card,.filters,.actions,footer,.no-print{display:none!important}body{background:white}.container{max-width:none;padding:0}.card{border:0;box-shadow:none}.two{display:block}.print-title{display:block!important}table{font-size:9px}}
+.print-title{display:none}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>TEAM LUNCH EXPENSE</h1><small>팀 식대 · 회식비 관리 시스템</small></div>
+  <div id="today"></div>
+</header>
+
+<div class="container">
+  <div class="toolbar no-print">
+    <button class="primary" onclick="newEntry()">＋ 비용 입력</button>
+    <button onclick="exportCSV()">Excel용 CSV</button>
+    <button onclick="backupJSON()">데이터 백업</button>
+    <label style="margin:0"><input type="file" id="restoreFile" accept=".json" onchange="restoreJSON(event)" style="display:none"><button onclick="document.getElementById('restoreFile').click()">데이터 복원</button></label>
+    <button onclick="window.print()">인쇄 / PDF</button>
+    <button class="danger" onclick="clearAll()">전체 데이터 삭제</button>
+  </div>
+
+  <div class="cards">
+    <div class="stat"><div class="t">조회 건수</div><div class="n" id="statCount">0</div></div>
+    <div class="stat"><div class="t">총 지출액</div><div class="n" id="statTotal">₩0</div></div>
+    <div class="stat"><div class="t">1건 평균</div><div class="n" id="statAvg">₩0</div></div>
+    <div class="stat"><div class="t">1인당 평균</div><div class="n" id="statPerPerson">₩0</div></div>
+  </div>
+
+  <div class="card entry-card" id="entryCard">
+    <div class="section-title">비용 입력 / 수정</div>
+    <div class="grid">
+      <div class="field"><label>사용일자 *</label><input type="date" id="date"></div>
+      <div class="field"><label>부서</label><input id="dept" placeholder="예: 생산팀"></div>
+      <div class="field"><label>사용자 / 담당자 *</label><input id="person" placeholder="예: 홍길동"></div>
+      <div class="field"><label>구분 *</label><select id="type"><option>중식</option><option>석식</option><option>회식</option><option>간식</option><option>기타</option></select></div>
+      <div class="field"><label>결제수단</label><select id="payment"><option>법인카드</option><option>현금</option><option>개인카드</option><option>기타</option></select></div>
+      <div class="field"><label>통화</label><select id="currency"><option value="KRW">KRW ₩</option><option value="CNY">CNY ¥</option></select></div>
+      <div class="field"><label>금액 *</label><input type="number" id="amount" min="0" step="1" placeholder="0"></div>
+      <div class="field"><label>인원수 *</label><input type="number" id="people" min="1" step="1" value="1"></div>
+      <div class="field wide"><label>식당 / 사용처</label><input id="vendor" placeholder="예: ○○식당"></div>
+      <div class="field wide"><label>비고</label><input id="memo" placeholder="영수증 번호, 프로젝트명 등"></div>
+      <div class="field full actions">
+        <button class="primary" onclick="saveEntry()">저장</button>
+        <button onclick="resetForm()">입력 취소</button>
+      </div>
+    </div>
+    <div class="notice" style="margin-top:12px">※ 데이터는 현재 사용 중인 브라우저에 저장됩니다. 여러 PC/직원이 동시에 사용하는 중앙 DB 기능은 별도 서버가 필요합니다.</div>
+  </div>
+
+  <div class="two" style="margin-top:16px">
+    <div class="card">
+      <div class="section-title print-title">TEAM LUNCH EXPENSE REPORT</div>
+      <div class="section-title no-print">지출 내역</div>
+      <div class="grid filters no-print">
+        <div class="field"><label>시작일</label><input type="date" id="fStart" onchange="render()"></div>
+        <div class="field"><label>종료일</label><input type="date" id="fEnd" onchange="render()"></div>
+        <div class="field"><label>부서</label><input id="fDept" oninput="render()" placeholder="전체"></div>
+        <div class="field"><label>담당자</label><input id="fPerson" oninput="render()" placeholder="전체"></div>
+        <div class="field"><label>구분</label><select id="fType" onchange="render()"><option value="">전체</option><option>중식</option><option>석식</option><option>회식</option><option>간식</option><option>기타</option></select></div>
+        <div class="field"><label>검색</label><input id="fSearch" oninput="render()" placeholder="식당/비고"></div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>일자</th><th>부서</th><th>담당자</th><th>구분</th><th>사용처</th>
+            <th class="num">인원</th><th class="num">금액</th><th>결제</th><th class="actions no-print">관리</th>
+          </tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">부서별 집계</div>
+      <table>
+        <thead><tr><th>부서</th><th class="num">건수</th><th class="num">금액</th></tr></thead>
+        <tbody id="deptSummary"></tbody>
+      </table>
+      <div class="section-title" style="margin-top:20px">구분별 집계</div>
+      <table>
+        <thead><tr><th>구분</th><th class="num">건수</th><th class="num">금액</th></tr></thead>
+        <tbody id="typeSummary"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+<footer>TEAM LUNCH EXPENSE · Browser Local Storage · 회사 내부 관리용</footer>
+
+<script>
+const KEY="teamLunchExpense_v1";
+let records=JSON.parse(localStorage.getItem(KEY)||"[]");
+let editId=null;
+
+function todayStr(){return new Date().toISOString().slice(0,10)}
+document.getElementById("today").textContent=new Date().toLocaleDateString("ko-KR",{year:"numeric",month:"long",day:"numeric"});
+function newEntry(){resetForm();document.getElementById("date").focus();window.scrollTo({top:0,behavior:"smooth"})}
+function resetForm(){
+ editId=null; document.getElementById("date").value=todayStr(); document.getElementById("dept").value="";
+ document.getElementById("person").value="";document.getElementById("type").value="중식";document.getElementById("payment").value="법인카드";
+ document.getElementById("currency").value="KRW";document.getElementById("amount").value="";document.getElementById("people").value=1;
+ document.getElementById("vendor").value="";document.getElementById("memo").value="";
+}
+function saveEntry(){
+ const date=dateVal(), person=v("person"), amount=Number(v("amount")), people=Number(v("people"));
+ if(!date||!person||!amount||amount<0||!people||people<1){alert("사용일자, 담당자, 금액, 인원수를 확인하세요.");return}
+ const data={id:editId||crypto.randomUUID(),date,dept:v("dept")||"미지정",person,type:v("type"),payment:v("payment"),currency:v("currency"),amount,people,vendor:v("vendor"),memo:v("memo"),updated:new Date().toISOString()};
+ if(editId) records=records.map(x=>x.id===editId?data:x); else records.push(data);
+ persist();resetForm();render();
+}
+function editEntry(id){
+ const x=records.find(r=>r.id===id);if(!x)return;editId=id;
+ for(const k of ["date","dept","person","type","payment","currency","amount","people","vendor","memo"]) document.getElementById(k).value=x[k]??"";
+ window.scrollTo({top:0,behavior:"smooth"});
+}
+function deleteEntry(id){if(confirm("이 항목을 삭제할까요?")){records=records.filter(x=>x.id!==id);persist();render()}}
+function v(id){return document.getElementById(id).value.trim()}
+function dateVal(){return document.getElementById("date").value}
+function persist(){localStorage.setItem(KEY,JSON.stringify(records))}
+function filtered(){
+ const s=document.getElementById("fStart").value,e=document.getElementById("fEnd").value,d=document.getElementById("fDept").value.trim().toLowerCase(),p=document.getElementById("fPerson").value.trim().toLowerCase(),t=document.getElementById("fType").value,q=document.getElementById("fSearch").value.trim().toLowerCase();
+ return records.filter(x=>(!s||x.date>=s)&&(!e||x.date<=e)&&(!d||x.dept.toLowerCase().includes(d))&&(!p||x.person.toLowerCase().includes(p))&&(!t||x.type===t)&&(!q||(`${x.vendor} ${x.memo}`).toLowerCase().includes(q))).sort((a,b)=>b.date.localeCompare(a.date));
+}
+function money(n,c){
+ if(c==="CNY") return "¥"+Number(n).toLocaleString("zh-CN",{maximumFractionDigits:0});
+ return "₩"+Number(n).toLocaleString("ko-KR",{maximumFractionDigits:0});
+}
+function render(){
+ const rows=filtered(), tbody=document.getElementById("tbody");tbody.innerHTML="";
+ rows.forEach(x=>{const tr=document.createElement("tr");
+ tr.innerHTML=`<td>${x.date}</td><td>${esc(x.dept)}</td><td>${esc(x.person)}</td><td><span class="tag">${esc(x.type)}</span></td><td>${esc(x.vendor||"-")}</td><td class="num">${x.people}</td><td class="num">${money(x.amount,x.currency)}</td><td>${esc(x.payment)}</td><td class="actions no-print"><button onclick="editEntry('${x.id}')">수정</button> <button class="danger" onclick="deleteEntry('${x.id}')">삭제</button></td>`;
+ tbody.appendChild(tr)});
+ if(!rows.length) tbody.innerHTML='<tr><td colspan="9" class="empty">조회된 지출 내역이 없습니다.</td></tr>';
+ // 통계는 통화별로 혼합 합산하지 않도록 KRW/CNY를 별도 표시
+ const krw=rows.filter(x=>x.currency==="KRW"),cny=rows.filter(x=>x.currency==="CNY");
+ document.getElementById("statCount").textContent=rows.length+"건";
+ document.getElementById("statTotal").textContent=`₩${sum(krw).toLocaleString()} / ¥${sum(cny).toLocaleString()}`;
+ document.getElementById("statAvg").textContent=`₩${avg(krw).toLocaleString()} / ¥${avg(cny).toLocaleString()}`;
+ const persons=rows.reduce((n,x)=>n+x.people,0);
+ document.getElementById("statPerPerson").textContent=`₩${(persons?sum(krw)/Math.max(1,krw.reduce((n,x)=>n+x.people,0)):0).toLocaleString()} / ¥${(persons?sum(cny)/Math.max(1,cny.reduce((n,x)=>n+x.people,0)):0).toLocaleString()}`;
+ summary("deptSummary",rows,"dept");summary("typeSummary",rows,"type");
+}
+function sum(a){return a.reduce((n,x)=>n+Number(x.amount),0)}
+function avg(a){return a.length?sum(a)/a.length:0}
+function summary(id,rows,key){
+ const m={};rows.forEach(x=>{if(!m[x[key]])m[x[key]]={n:0,krw:0,cny:0};m[x[key]].n++;m[x[key]][x.currency.toLowerCase()]+=Number(x.amount)});
+ const tb=document.getElementById(id);tb.innerHTML="";
+ Object.entries(m).sort((a,b)=>(b[1].krw+b[1].cny)-(a[1].krw+a[1].cny)).forEach(([k,z])=>{
+  const tr=document.createElement("tr");tr.innerHTML=`<td>${esc(k)}</td><td class="num">${z.n}</td><td class="num">₩${z.krw.toLocaleString()} / ¥${z.cny.toLocaleString()}</td>`;tb.appendChild(tr)
+ });
+ if(!Object.keys(m).length)tb.innerHTML='<tr><td colspan="3" class="empty">데이터 없음</td></tr>';
+}
+function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
+function exportCSV(){
+ const rows=filtered();let csv="\ufeff일자,부서,담당자,구분,사용처,인원,금액,통화,결제수단,비고\n";
+ rows.forEach(x=>{csv+=[x.date,x.dept,x.person,x.type,x.vendor,x.people,x.amount,x.currency,x.payment,x.memo].map(q=>`"${String(q??"").replaceAll('"','""')}"`).join(",")+"\n"});
+ downloadBlob(csv,"team-lunch-expense.csv","text/csv;charset=utf-8")
+}
+function backupJSON(){downloadBlob(JSON.stringify(records,null,2),"team-lunch-expense-backup.json","application/json")}
+function restoreJSON(ev){
+ const f=ev.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!Array.isArray(d))throw Error();if(confirm("현재 데이터를 복원 데이터로 교체할까요?")){records=d;persist();render();}}catch(e){alert("백업 파일 형식이 올바르지 않습니다.")}};r.readAsText(f);ev.target.value=""
+}
+function downloadBlob(content,name,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([content],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+function clearAll(){if(confirm("모든 지출 데이터를 삭제합니다. 계속할까요?")&&confirm("정말 전체 삭제하시겠습니까?")){records=[];persist();render()}}
+resetForm();render();
+</script>
+</body>
+</html>
